@@ -1,0 +1,1 @@
+A script that cleans up old debug symbols from Audacity Sentry
