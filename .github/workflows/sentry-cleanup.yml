@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  SENTRY_TOKEN: ${{ SENTRY_MAINTENANCE_TOKEN }}
+  SENTRY_TOKEN: ${{ secrets.SENTRY_MAINTENANCE_TOKEN }}
 
 jobs:
   build:
