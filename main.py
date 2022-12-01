@@ -5,6 +5,7 @@ import dateutil.parser
 import pytz as pytz
 import requests
 import re
+import subprocess
 
 dsym_endpoint = "https://sentry.audacityteam.org/api/0/projects/sentry/audacity-crash/files/dsyms/"
 
@@ -69,6 +70,8 @@ class Contex:
     def _get_github_releases(self):
         current_url = "https://api.github.com/repos/audacity/audacity/releases"
 
+        max_releases = 5
+
         s = requests.Session()
 
         while None != current_url:
@@ -78,6 +81,10 @@ class Contex:
 
             for release_json in r.json():
                 self.releases.append(dateutil.parser.isoparse(release_json['published_at']))
+
+            if len(self.releases) > max_releases:
+                self.releases = self.releases[:max_releases]
+                break
 
             if "next" in r.links:
                 current_url = r.links["next"]["url"]
@@ -173,3 +180,8 @@ if __name__ == '__main__':
     context = Contex()
     request_dsyms(context)
     context.print_stats()
+
+    try:
+        print(subprocess.check_output(["df", "-h"]).decode('utf-8'))
+    finally:
+        print("Run finished")
