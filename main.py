@@ -63,7 +63,7 @@ class Contex:
 
     def __init__(self):
         self._get_github_releases()
-        self.safe_time = self.now - timedelta(days=7)
+        self.safe_time = self.now - timedelta(days=3)
 
         self.session = requests.Session()
 
