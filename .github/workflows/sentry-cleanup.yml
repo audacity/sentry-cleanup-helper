@@ -29,3 +29,4 @@ jobs:
     - name: Run cleanup
       run: |
         python main.py
+    - uses: gautamkrishnar/keepalive-workflow@v2
