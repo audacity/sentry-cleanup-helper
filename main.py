@@ -7,7 +7,8 @@ import requests
 import re
 import subprocess
 
-dsym_endpoint = "https://sentry.audacityteam.org/api/0/projects/sentry/audacity-crash/files/dsyms/"
+api_root = "https://sentry.audacityteam.org/api/0"
+projects = ["audacity-crash", "au4", "au4-sandbox"]
 
 audacity_files = [
     re.compile(r"Audacity.*"),
@@ -44,9 +45,36 @@ class SentryFile:
         self.name = file_json["objectName"]
 
 
+def get_github_releases():
+    current_url = "https://api.github.com/repos/audacity/audacity/releases"
+
+    max_releases = 5
+
+    releases = []
+    s = requests.Session()
+
+    while None != current_url:
+        print(f'Requesting {current_url}...')
+
+        r = s.get(current_url)
+
+        for release_json in r.json():
+            releases.append(dateutil.parser.isoparse(release_json['published_at']))
+
+        if len(releases) > max_releases:
+            releases = releases[:max_releases]
+            break
+
+        if "next" in r.links:
+            current_url = r.links["next"]["url"]
+        else:
+            current_url = None
+
+    return releases
+
+
 class Contex:
     now = datetime.now(tz=pytz.utc)
-    releases = []
 
     deleted_files_count = 0
     deleted_files_size = 0
@@ -59,37 +87,14 @@ class Contex:
 
     processed_files_count = 0
 
-    non_audacity_libs = set()
-
-    def __init__(self):
-        self._get_github_releases()
+    def __init__(self, project, releases):
+        self.project = project
+        self.dsym_endpoint = f'{api_root}/projects/sentry/{project}/files/dsyms/'
+        self.releases = releases
+        self.non_audacity_libs = set()
         self.safe_time = self.now - timedelta(days=3)
 
         self.session = requests.Session()
-
-    def _get_github_releases(self):
-        current_url = "https://api.github.com/repos/audacity/audacity/releases"
-
-        max_releases = 5
-
-        s = requests.Session()
-
-        while None != current_url:
-            print(f'Requesting {current_url}...')
-
-            r = s.get(current_url)
-
-            for release_json in r.json():
-                self.releases.append(dateutil.parser.isoparse(release_json['published_at']))
-
-            if len(self.releases) > max_releases:
-                self.releases = self.releases[:max_releases]
-                break
-
-            if "next" in r.links:
-                current_url = r.links["next"]["url"]
-            else:
-                current_url = None
 
     def _is_in_release_timeframe(self, file):
         delta = timedelta(days=1)
@@ -141,13 +146,14 @@ class Contex:
         self.deleted_files_count = self.deleted_files_count + 1
         self.deleted_files_size = self.deleted_files_size + file.size
 
-        url = f'{dsym_endpoint}?id={file.id}'
+        url = f'{self.dsym_endpoint}?id={file.id}'
         r = self.session.delete(url, auth=SentryAuth())
         if r.status_code != 204:
             print(f'Error deleting file {file.name} ({file.id}, {datetime.isoformat(file.date_created)}): {r.status_code} {r.text}')
             raise Exception(f'Error deleting file {file.name} ({file.id}, {datetime.isoformat(file.date_created)}): {r.status_code} {r.text}')
 
     def print_stats(self):
+        print(f'Project {self.project}:')
         print(f'Processed files: {self.processed_files_count}')
         print(f'Deleted files: {self.deleted_files_count}')
         print(f'Deleted files size: {format_file_size(self.deleted_files_size)}')
@@ -159,7 +165,7 @@ class Contex:
 
 def request_dsyms(context):
     has_more = True
-    current_url = dsym_endpoint
+    current_url = context.dsym_endpoint
 
     s = requests.Session()
 
@@ -177,9 +183,11 @@ def request_dsyms(context):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    context = Contex()
-    request_dsyms(context)
-    context.print_stats()
+    releases = get_github_releases()
+    for project in projects:
+        context = Contex(project, releases)
+        request_dsyms(context)
+        context.print_stats()
 
     try:
         print(subprocess.check_output(["df", "-h"]).decode('utf-8'))
