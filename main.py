@@ -24,6 +24,7 @@ qt_files = [
     re.compile(r"(lib)?Qt.+"),
     re.compile(r"(lib)?q[\w-]+\.(dll|dylib|so)"),
     re.compile(r".+plugin\.(dll|dylib|so)"),
+    re.compile(r"(lib)?(assimp|adwaita|bradient|cupsprintersupport|icu\w+|d3dcompiler_\d+|opengl32sw|[\w-]+-shell(-v\d+)?|[\w-]+-server)\.(dll|dylib|so)(\.\d+)*"),
 ]
 
 
@@ -50,6 +51,7 @@ class SentryFile:
         self.date_created = dateutil.parser.isoparse(file_json['dateCreated'])
         self.size = int(file_json["size"])
         self.name = file_json["objectName"]
+        self.arch = file_json.get("cpuName")
 
 
 def get_github_releases():
@@ -147,13 +149,13 @@ class Contex:
         is_audacity_file = self._is_audacity_file(file)
 
         if not skipped and not is_audacity_file:
-            if file.name not in self.non_audacity_libs:
+            if (file.name, file.arch) not in self.non_audacity_libs:
                 print(f'({self.processed_files_count}) Skipped file {file.name} ({file.id}, {datetime.isoformat(file.date_created)}): first occurrence of the file.')
                 skipped = True
 
         if skipped:
             if not is_audacity_file:
-                self.non_audacity_libs.add(file.name)
+                self.non_audacity_libs.add((file.name, file.arch))
 
             self.skipped_files_count = self.skipped_files_count + 1
             self.skipped_files_size = self.skipped_files_size + file.size
