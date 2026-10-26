@@ -1,0 +1,62 @@
+name: Upload Qt debug files
+
+# Run once for each Qt version that a release ships. Sentry finds the files by debug ID, so they serve every build
+# that uses the same Qt package. Keep the Qt settings the same as in the Audacity build workflows.
+
+on:
+  workflow_dispatch:
+    inputs:
+      qt_version:
+        description: 'Qt version'
+        required: true
+        default: '6.11.2'
+      project:
+        description: 'Sentry project'
+        required: true
+        default: 'au4'
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: windows-2022,     qt_host: windows,     qt_arch: win64_msvc2022_64 }
+          - { runner: macos-26,         qt_host: mac,         qt_arch: clang_64 }
+          - { runner: ubuntu-22.04,     qt_host: linux,       qt_arch: linux_gcc_64 }
+          - { runner: ubuntu-24.04-arm, qt_host: linux_arm64, qt_arch: linux_gcc_arm64 }
+
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+    - uses: actions/checkout@v6
+    - name: Set up Python 3.14
+      uses: actions/setup-python@v6
+      with:
+        python-version: "3.14"
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v4
+      with:
+        setup-python: false
+        version: ${{ inputs.qt_version }}
+        host: ${{ matrix.qt_host }}
+        target: 'desktop'
+        arch: ${{ matrix.qt_arch }}
+        modules: 'qt5compat qtnetworkauth qtshadertools qtwebsockets qtgraphs qtquick3d'
+        # https://github.com/miurahr/aqtinstall/pull/1000#issuecomment-4109913885
+        aqtsource: 'git+https://github.com/miurahr/aqtinstall.git'
+        py7zrversion: '@git+https://github.com/miurahr/py7zr.git'
+    - name: Install sentry-cli
+      run: |
+        python -m pip install sentry-cli==3.5.0
+    - name: Upload Qt debug files
+      env:
+        SENTRY_URL: https://sentry.audacityteam.org
+        SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_MAINTENANCE_TOKEN }}
+        SENTRY_ORG: sentry
+        SENTRY_PROJECT: ${{ inputs.project }}
+      run: |
+        python upload_qt_debug_files.py

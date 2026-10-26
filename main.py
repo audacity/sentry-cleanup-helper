@@ -19,6 +19,13 @@ audacity_files = [
     re.compile(r"Wrapper.*"),
 ]
 
+# Uploaded once per Qt version by upload-qt-debug-files.yml and needed by every build that ships that version
+qt_files = [
+    re.compile(r"(lib)?Qt.+"),
+    re.compile(r"(lib)?q[\w-]+\.(dll|dylib|so)"),
+    re.compile(r".+plugin\.(dll|dylib|so)"),
+]
+
 
 def format_file_size(size):
     if size < 1024:
@@ -111,11 +118,22 @@ class Contex:
 
         return False
 
+    def _is_qt_file(self, file):
+        for pattern in qt_files:
+            if pattern.fullmatch(file.name):
+                return True
+
+        return False
+
     def process_file(self, file):
         self.processed_files_count = self.processed_files_count + 1
 
         skipped = False
-        if self._is_in_release_timeframe(file):
+        if self._is_qt_file(file):
+            skipped = True
+            print(
+                f'({self.processed_files_count}) Skipped file {file.name} ({file.id}, {datetime.isoformat(file.date_created)}): Qt file.')
+        elif self._is_in_release_timeframe(file):
             skipped = True
             self.skipped_release_files_count = self.skipped_release_files_count + 1
             self.skipped_release_files_size = self.skipped_release_files_size + file.size
